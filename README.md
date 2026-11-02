@@ -135,6 +135,16 @@ When you change `api/wrangler.jsonc`, refresh the `Env` types:
 pnpm --filter bill-splitter-api cf-typegen
 ```
 
+## Decisions
+
+1. **Store every amount as integer cents.** Bills reject non-positive, fractional, and unsafe integers. Shares use quotient and remainder: for 1000 cents and 3 members, the base is 333 cents and the first member receives the one-cent remainder, producing 334, 333, 333 in insertion order.
+2. **Put integrity rules in SQLite.** Named checks protect nonblank names and titles, positive bill totals, nonnegative share amounts and member order, and payment timestamp/key consistency. Composite foreign keys make each share's bill and member belong to the same home. Home deletion cascades through its members, bills, and shares.
+3. **Make payment a conditional database update.** A share is paid only by `UPDATE ... WHERE paid_at IS NULL`; its idempotency key and timestamp are stored on that same row. A retry with the same key receives the stored payment result, while a different key receives 409. This avoids a check-then-update race.
+
+## API and page notes
+
+The page accepts a home ID in the `homeId` query parameter or the home selector. It reads `/api/homes/:homeId/bills` and `/api/homes/:homeId/balances`; the bills read route supports the required household view. Payment buttons remain disabled during a request, do not change the displayed paid state optimistically, and reuse the payment key after a timeout or failed request. API errors use JSON `{ "error": "message" }` responses.
+
 ## Rules for the tests
 
 - The visible tests are in `api/test`. They start with a failing result. Your job is to make them pass.
